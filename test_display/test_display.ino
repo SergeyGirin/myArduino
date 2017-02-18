@@ -20,16 +20,17 @@ ESP8266WiFiMulti WiFiMulti;
 int myTimeZona = 3*60*60; // +3
 time_t myLocalTime = 1474024173 + myTimeZona ; // Store the current time in time variable t 
 
-
-
 void displayTm1637()
 {
+  int8_t my_hour = hour();
+  int8_t my_minute = minute();
   points = !points;
   tm1637.point(points);
-  tm1637.display(0,hour()/10);
-  tm1637.display(1,hour()%10);
-  tm1637.display(2,minute()/10);
-  tm1637.display(3,minute()%10);
+   
+  if (my_hour/10>0) tm1637.display(0,my_hour/10); else tm1637.display(0,0x7f);
+  tm1637.display(1,my_hour%10);
+  tm1637.display(2,my_minute/10);
+  tm1637.display(3,my_minute%10);
 }
 
 void timerIsr()
