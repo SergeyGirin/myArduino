@@ -8,34 +8,26 @@
 #include <TimeLib.h>
 #include <IRremoteESP8266.h>
 #include <Servo.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#include "TM1637.h"
 
 
 
 Servo myservo;  // create servo object to control a servo 
-const int SERVO_PIN = 4;//attaches the servo on D2 (GPIO4) to the servo object 
+const int SERVO_PIN = 4;//attaches the servo on D2 (GIO4) to the servo object 
 
-String VER = "12";
+String VER = "10";
 const int LED_PIN = 2;
-const int ZUMMER_PIN = 13; //an pikalka is connected to D7 (GPIO13)
-const int RELE_PIN = 12; //an pikalka is connected to D6 (GPIO12)
-const int IRRECV_PIN = 5; //an IR detector/demodulator is connected to D1 (GPIO5)
-const int ONE_WIRE_BUS = 14; //an pikalka is connected to D5 (GPIO14)
+const int ZUMMER_PIN = 13; //is connected to D7 (GI13)
+const int RELE_PIN = 12; //is connected to D6 (GI12)
+const int IRRECV_PIN = 5; //IR detector/demodulator is connected to D1 (GIO5)
 
 int servoPosBase = 180; // базовое состояние сервопривода
 int servoPos = servoPosBase; // текущее состояние сервопривода
 long servoTimeLimit = long(10) * long(60) * long(1000);
 long servoTimeStart = 0;
+long baseTimeLimit = long(30) * long(60) * long(1000);
+long baseTimeStart = 0;
 
 IRrecv irrecv(IRRECV_PIN);
-
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature sensors(&oneWire);
-DeviceAddress insideThermometer = { 0x28, 0xFF, 0xC1, 0x71, 0x54, 0x14, 0x00, 0xB2 };
-
-TM1637 tm1637(0, 15);
 
 
 
@@ -57,16 +49,6 @@ void timerIsr()
 {
   setTime(myLocalTime++);
   digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-  displayTm1637();
-}
-
-void displayTm1637()
-{
-  tm1637.point(!digitalRead(LED_PIN));
-  tm1637.display(0,hour()/10);
-  tm1637.display(1,hour()%10);
-  tm1637.display(2,minute()/10);
-  tm1637.display(3,minute()%10);
 }
 
 String handleFileList() {
@@ -335,12 +317,6 @@ bool handleFileRead(String path){
       loadWebFiles();
       server.send(200, "text/html", "Files reloaded.");
     }
-    if (argName == "termo" and arg == "0")
-    {
-      isContinue = 0;
-      server.send(200, "text/html", String(getTemperature(insideThermometer)) + ";");
-    }
-
     
   }
 
@@ -590,13 +566,13 @@ void getTimeHTTP()
 
 void mySinhro()
 {
-   String currentTime = myDate();
-   if (currentTime.substring(14) == "00:13" or currentTime.substring(14) == "30:13") 
+   String curentTime = myDate();
+   if (curentTime.substring(14) == "00:13" or curentTime.substring(14) == "30:13") 
    {
     toLog(1,"Time Synchronization");
     getTimeHTTP();
    }
-   if (currentTime.substring(11) == "00:00:00") 
+   if (curentTime.substring(11) == "00:00:00") 
    {
     toLog(1,logRotate());
    }
@@ -612,13 +588,18 @@ void mySinhro()
         servoRun(servoPosBase);
       }
    }
-   //if (currentTime.substring(15) == "3:16" or currentTime.substring(15) == "8:16")
-   if (currentTime.substring(15) == "3:16")
+   // контроль установки базы 
+   if (baseTimeStart > 0)
    {
-    float currentTemperature = getTemperature(insideThermometer);
-    String result = "Temp C: "+ String(currentTemperature);
-    //toLog(1,result);
+		if (long(baseTimeStart) + long(baseTimeLimit) < millis())
+		{
+			loadWebFiles();
+			readBase();
+			baseTimeStart = 0;
+		}
+       
    }
+
    
 }
 
@@ -692,6 +673,7 @@ void toBase(String str)
   File logFile = SPIFFS.open("/base.txt", "w");
   logFile.println(str);
   logFile.close();
+  baseTimeStart = millis();
 }
 
 void zummer()
@@ -1022,15 +1004,6 @@ void readBase()
     toLog(1,"servoPosBase in file: *"+base+"*");
   }
 }
-
-float getTemperature(DeviceAddress deviceAddress)
-{
-  sensors.requestTemperatures();
-  float tempC = sensors.getTempC(deviceAddress);
-  toLog(1,"Temp C: "+ String(tempC));
-  return tempC;
-}
-
 void setupPins()
 {
   pinMode(RELE_PIN, OUTPUT);
@@ -1043,12 +1016,6 @@ void setupPins()
   digitalWrite(RELE_PIN, 1);
   servoTimeStart = millis();  
   irrecv.enableIRIn();  // Start the receiver
-  sensors.begin();
-  sensors.setResolution(insideThermometer, 12);
-  // Инициализация дисплея
-  tm1637.init();
-// Установка яркости дисплея  
-  tm1637.set(2);
 }
 
 void setup() {
